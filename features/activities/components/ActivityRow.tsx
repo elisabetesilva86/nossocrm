@@ -13,7 +13,11 @@ interface ActivityRowProps {
     onSelect?: (id: string, selected: boolean) => void;
 }
 
-export const ActivityRow: React.FC<ActivityRowProps> = ({
+/**
+ * Performance: essa linha aparece em listas grandes (activities).
+ * `React.memo` ajuda a evitar re-render de todas as linhas quando apenas seleção/1 item muda.
+ */
+const ActivityRowComponent: React.FC<ActivityRowProps> = ({
     activity,
     deal,
     onToggleComplete,
@@ -185,3 +189,5 @@ export const ActivityRow: React.FC<ActivityRowProps> = ({
         </div>
     );
 };
+
+export const ActivityRow = React.memo(ActivityRowComponent);

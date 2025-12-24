@@ -26,10 +26,12 @@ export async function GET() {
   if (meError || !me?.organization_id) return json({ error: 'Profile not found' }, 404);
   if (me.role !== 'admin') return json({ error: 'Forbidden' }, 403);
 
+  // Performance: evita payload grande em organizações com muitos usuários.
   const { data: profiles, error } = await supabase
     .from('profiles')
     .select('id, email, role, organization_id, created_at')
     .eq('organization_id', me.organization_id)
+    .limit(200)
     .order('created_at', { ascending: false });
 
   if (error) return json({ error: error.message }, 500);

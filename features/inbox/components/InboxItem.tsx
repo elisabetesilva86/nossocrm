@@ -10,7 +10,11 @@ interface InboxItemProps {
   onSelect?: (id: string) => void;
 }
 
-export const InboxItem: React.FC<InboxItemProps> = ({
+/**
+ * Performance: Inbox pode ter muitas linhas; `React.memo` evita re-render em massa
+ * quando apenas 1 item muda (ex.: abrir/fechar menu local).
+ */
+const InboxItemComponent: React.FC<InboxItemProps> = ({
   activity,
   onToggleComplete,
   onSnooze,
@@ -142,3 +146,5 @@ export const InboxItem: React.FC<InboxItemProps> = ({
     </div>
   );
 };
+
+export const InboxItem = React.memo(InboxItemComponent);

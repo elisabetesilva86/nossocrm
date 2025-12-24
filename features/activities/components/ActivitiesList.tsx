@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Activity, Deal } from '@/types';
 import { ActivityRow } from './ActivityRow';
 
@@ -21,6 +21,13 @@ export const ActivitiesList: React.FC<ActivitiesListProps> = ({
     selectedActivities = new Set(),
     onSelectActivity
 }) => {
+    // Performance: Activities pode ser uma lista grande; evitamos `find` por linha (O(N*M)).
+    const dealById = useMemo(() => {
+        const map = new Map<string, Deal>();
+        for (const d of deals) map.set(d.id, d);
+        return map;
+    }, [deals]);
+
     if (activities.length === 0) {
         return (
             <div className="text-center py-12 bg-white dark:bg-dark-card rounded-xl border border-slate-200 dark:border-white/5 border-dashed">
@@ -35,7 +42,7 @@ export const ActivitiesList: React.FC<ActivitiesListProps> = ({
                 <ActivityRow
                     key={activity.id}
                     activity={activity}
-                    deal={deals.find(d => d.id === activity.dealId)}
+                    deal={activity.dealId ? dealById.get(activity.dealId) : undefined}
                     onToggleComplete={onToggleComplete}
                     onEdit={onEdit}
                     onDelete={onDelete}

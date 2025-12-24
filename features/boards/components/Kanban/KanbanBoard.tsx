@@ -49,6 +49,33 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     currentStageId: string;
   } | null>(null);
 
+  /**
+   * Performance: o Kanban renderiza listas grandes. Evitamos padrões O(S*N) no render:
+   * - Antes: para cada stage, fazia `filteredDeals.filter(...)` + `reduce(...)`.
+   * - Agora: agrupamos 1 vez (O(N)) e só lemos por stage (O(S)).
+   */
+  const dealsByStageId = useMemo(() => {
+    const map = new Map<string, DealView[]>();
+    const totals = new Map<string, number>();
+    for (const deal of filteredDeals) {
+      const list = map.get(deal.status);
+      if (list) list.push(deal);
+      else map.set(deal.status, [deal]);
+
+      totals.set(deal.status, (totals.get(deal.status) ?? 0) + (deal.value ?? 0));
+    }
+    return { map, totals };
+  }, [filteredDeals]);
+
+  // Performance: evita `find` por stage (O(S*L)). Map é O(1) por lookup.
+  const lifecycleStageNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const ls of lifecycleStages ?? []) {
+      if (ls?.id && ls?.name) map.set(ls.id, ls.name);
+    }
+    return map;
+  }, [lifecycleStages]);
+
   // Performance: index deals by id once so callbacks can stay stable across menu toggles.
   const dealsById = useMemo(() => new Map(filteredDeals.map((d) => [d.id, d])), [filteredDeals]);
 
@@ -86,14 +113,14 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   return (
     <div className="flex gap-4 h-full overflow-x-auto pb-2 w-full">
       {stages.map(stage => {
-        const stageDeals = filteredDeals.filter(l => l.status === stage.id);
-        const stageValue = stageDeals.reduce((sum, l) => sum + l.value, 0);
+        const stageDeals = dealsByStageId.map.get(stage.id) ?? [];
+        const stageValue = dealsByStageId.totals.get(stage.id) ?? 0;
         const isOver = dragOverStage === stage.id && draggingId !== null;
 
         // Resolve linked stage name
         const linkedStageName =
-          stage.linkedLifecycleStage && lifecycleStages
-            ? lifecycleStages.find(ls => ls.id === stage.linkedLifecycleStage)?.name
+          stage.linkedLifecycleStage
+            ? lifecycleStageNameById.get(stage.linkedLifecycleStage) ?? null
             : null;
 
         return (
