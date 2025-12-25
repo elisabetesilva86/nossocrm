@@ -676,7 +676,7 @@ export const BoardCreationWizard: React.FC<BoardCreationWizardProps> = ({
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
       <div
-        className={`relative z-10 w-full h-full ${isChatMode ? 'sm:max-w-7xl' : 'sm:max-w-6xl'} bg-white dark:bg-dark-card rounded-xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[calc(100vh-1rem)] sm:max-h-[90vh] transition-all duration-300`}
+        className={`relative z-10 w-full h-full sm:h-auto ${isChatMode ? 'sm:max-w-6xl' : 'sm:max-w-5xl'} bg-white dark:bg-dark-card rounded-xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[calc(100vh-1rem)] sm:max-h-[90vh] transition-all duration-300`}
       >
         {/* Header */}
         <div className="flex items-center justify-between p-4 sm:p-6 border-b border-slate-200 dark:border-white/10 shrink-0">
