@@ -667,7 +667,7 @@ export const BoardCreationWizard: React.FC<BoardCreationWizardProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center p-2 sm:p-6">
       <AIProcessingModal
         isOpen={isProcessingModalOpen}
         currentStep={processingStep}
@@ -676,11 +676,11 @@ export const BoardCreationWizard: React.FC<BoardCreationWizardProps> = ({
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
       <div
-        className={`relative z-10 w-full ${isChatMode ? 'max-w-7xl' : 'max-w-6xl'} bg-white dark:bg-dark-card rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] transition-all duration-300`}
+        className={`relative z-10 w-full h-full ${isChatMode ? 'sm:max-w-7xl' : 'sm:max-w-6xl'} bg-white dark:bg-dark-card rounded-xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[calc(100vh-1rem)] sm:max-h-[90vh] transition-all duration-300`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-white/10 shrink-0">
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+        <div className="flex items-center justify-between p-4 sm:p-6 border-b border-slate-200 dark:border-white/10 shrink-0">
+          <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
             {isChatMode ? (
               <>
                 <MessageSquare size={24} className="text-primary-500" /> Refinar com IA
@@ -698,10 +698,10 @@ export const BoardCreationWizard: React.FC<BoardCreationWizardProps> = ({
         </div>
 
         {/* Content Body */}
-        <div className={`flex flex-1 overflow-hidden ${isChatMode ? 'flex-row' : 'flex-col'}`}>
+        <div className={`flex flex-1 overflow-hidden ${isChatMode ? 'flex-col lg:flex-row' : 'flex-col'}`}>
           {/* Chat Section (Only in Chat Mode) */}
           {isChatMode && (
-            <div className="w-1/3 border-r border-slate-200 dark:border-white/10 flex flex-col bg-slate-50 dark:bg-dark-bg/50">
+            <div className="h-[38vh] lg:h-auto w-full lg:w-1/3 border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-white/10 flex flex-col bg-slate-50 dark:bg-dark-bg/50">
               <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
                 {chatMessages.map((msg, idx) => (
                   <div
@@ -788,7 +788,7 @@ export const BoardCreationWizard: React.FC<BoardCreationWizardProps> = ({
 
           {/* Main Content / Preview Section */}
           <div
-            className={`flex-1 overflow-y-auto custom-scrollbar p-6 ${isChatMode ? 'bg-slate-100 dark:bg-black/20' : ''}`}
+            className={`flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 ${isChatMode ? 'bg-slate-100 dark:bg-black/20' : ''}`}
           >
             {step === 'select' && (
               <div className="space-y-6">
