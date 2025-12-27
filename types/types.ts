@@ -315,6 +315,11 @@ export interface Board {
   id: string;
   organizationId?: OrganizationId; // Tenant FK (for RLS) - optional for templates
   name: string;
+  /**
+   * Identificador humano e estável (slug) para integrações.
+   * Ex.: "sales", "pos-venda".
+   */
+  key?: string;
   description?: string;
   linkedStage?: ContactStage; // Quando mover para etapa final, atualiza o stage do contato
   linkedLifecycleStage?: string; // Qual lifecycle stage este board gerencia (ex: 'LEAD', 'MQL', 'CUSTOMER')

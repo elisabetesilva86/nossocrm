@@ -13,6 +13,10 @@
 - **Boards (fix)**:
   - Corrigido erro ao criar/atualizar board quando o Supabase/PostgREST ainda não tem a coluna `boards.default_product_id` (migration não aplicada ou schema cache desatualizado).
   - Detalhe técnico: `boardsService` agora **omite** `default_product_id` quando não há produto e faz **retry** removendo o campo ao detectar o erro “schema cache”.
+- **Boards (DX / Integrações)**:
+  - Adicionada a chave/slug **`boards.key`** (única por organização, best-effort) para identificar pipelines em integrações sem depender de UUID.
+  - Detalhe técnico: a migration consolidada `supabase/migrations/20251201000000_schema_init.sql` cria coluna + índice único (parcial) e faz backfill por `unaccent(name)` com sufixos (`-2`, `-3`, …) em caso de colisão.
+  - UI: modal de criar/editar board agora mostra a **Chave (slug)** com botão de copiar e geração automática a partir do nome.
 - **Settings (UI)**:
   - `SettingsSection` foi padronizado para o layout de card `rounded-2xl` com header mais clean, alinhando com o padrão visual recente das telas de Configurações.
   - Abas/rotas:

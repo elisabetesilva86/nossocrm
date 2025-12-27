@@ -1,11 +1,13 @@
 import React, { useMemo, useState, useId } from 'react';
-import { Plus, GripVertical, Trash2, ChevronDown, Settings } from 'lucide-react';
+import { Plus, GripVertical, Trash2, ChevronDown, Settings, Copy } from 'lucide-react';
 import { Board, BoardStage, ContactStage } from '@/types';
 import { BOARD_TEMPLATES, BoardTemplateType } from '@/board-templates';
 import { LifecycleSettingsModal } from '@/features/settings/components/LifecycleSettingsModal';
 import { useCRM } from '@/context/CRMContext';
+import { useToast } from '@/context/ToastContext';
 import { Modal } from '@/components/ui/Modal';
 import { MODAL_FOOTER_CLASS } from '@/components/ui/modalStyles';
+import { slugify } from '@/utils/slugify';
 
 interface CreateBoardModalProps {
   isOpen: boolean;
@@ -112,7 +114,10 @@ export const CreateBoardModal: React.FC<CreateBoardModalProps> = ({
   const headingId = useId();
 
   const { lifecycleStages, products } = useCRM();
+  const { addToast } = useToast();
   const [name, setName] = useState('');
+  const [boardKey, setBoardKey] = useState('');
+  const [keyTouched, setKeyTouched] = useState(false);
   const [description, setDescription] = useState('');
   const [nextBoardId, setNextBoardId] = useState<string>('');
   const [linkedLifecycleStage, setLinkedLifecycleStage] = useState<string>('');
@@ -131,6 +136,8 @@ export const CreateBoardModal: React.FC<CreateBoardModalProps> = ({
     if (isOpen) {
       if (editingBoard) {
         setName(editingBoard.name);
+        setBoardKey(editingBoard.key || slugify(editingBoard.name));
+        setKeyTouched(false);
         setDescription(editingBoard.description || '');
         setNextBoardId(editingBoard.nextBoardId || '');
         setLinkedLifecycleStage(editingBoard.linkedLifecycleStage || '');
@@ -144,6 +151,8 @@ export const CreateBoardModal: React.FC<CreateBoardModalProps> = ({
       } else {
         // Reset for new board
         setName('');
+        setBoardKey('');
+        setKeyTouched(false);
         setDescription('');
         setNextBoardId('');
         setLinkedLifecycleStage('');
@@ -232,8 +241,15 @@ export const CreateBoardModal: React.FC<CreateBoardModalProps> = ({
   const handleSave = () => {
     if (!name.trim()) return;
 
+    const normalizedKey = boardKey.trim() ? slugify(boardKey) : '';
+    if (boardKey.trim() && !normalizedKey) {
+      addToast('Chave inválida. Use letras/números e hífen.', 'error');
+      return;
+    }
+
     onSave({
       name: name.trim(),
+      key: normalizedKey || undefined,
       description: description.trim() || undefined,
       nextBoardId: (nextBoardId || null) as any,
       linkedLifecycleStage: (linkedLifecycleStage || null) as any,
@@ -248,6 +264,20 @@ export const CreateBoardModal: React.FC<CreateBoardModalProps> = ({
     });
 
     onClose();
+  };
+
+  const handleCopyKey = async () => {
+    const normalizedKey = boardKey.trim() ? slugify(boardKey) : '';
+    if (!normalizedKey) {
+      addToast('Defina uma chave primeiro.', 'warning');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(normalizedKey);
+      addToast('Chave copiada.', 'success');
+    } catch {
+      addToast('Não foi possível copiar.', 'error');
+    }
   };
 
   return (
@@ -313,10 +343,45 @@ export const CreateBoardModal: React.FC<CreateBoardModalProps> = ({
                 <input
                   type="text"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setName(next);
+                    if (!keyTouched) setBoardKey(slugify(next));
+                  }}
                   placeholder="Ex: Pipeline de Vendas, Onboarding, etc"
                   className="w-full px-4 py-2.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 />
+              </div>
+
+              {/* Board key (slug) */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  Chave (slug) — para integrações
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={boardKey}
+                    onChange={(e) => {
+                      setKeyTouched(true);
+                      setBoardKey(e.target.value);
+                    }}
+                    placeholder="ex: vendas-b2b"
+                    className="w-full px-4 py-2.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCopyKey}
+                    className="shrink-0 px-3 py-2.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 hover:bg-slate-50 dark:hover:bg-white/10 text-slate-700 dark:text-slate-200"
+                    aria-label="Copiar chave do board"
+                    title="Copiar chave"
+                  >
+                    <Copy size={16} />
+                  </button>
+                </div>
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                  Dica: é mais fácil usar isso no n8n/Make do que um UUID.
+                </p>
               </div>
 
               {/* Description */}

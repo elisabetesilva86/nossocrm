@@ -16,6 +16,7 @@
 import { supabase } from './client';
 import { Board, BoardStage, BoardGoal, AgentPersona, OrganizationId } from '@/types';
 import { sanitizeUUID, requireUUID } from './utils';
+import { slugify } from '@/utils/slugify';
 
 function isMissingColumnInSchemaCache(error: unknown, table: string, column: string): boolean {
   const message = String((error as any)?.message ?? '');
@@ -70,6 +71,8 @@ export interface DbBoard {
   id: string;
   /** ID da organização/tenant. */
   organization_id: string;
+  /** Identificador humano (slug) para integrações. */
+  key?: string | null;
   /** Nome do board. */
   name: string;
   /** Descrição do propósito. */
@@ -187,6 +190,7 @@ const transformBoard = (db: DbBoard, stages: DbBoardStage[]): Board => {
   return {
     id: db.id,
     organizationId: db.organization_id,
+    key: (db as any).key || undefined,
     name: db.name,
     description: db.description || undefined,
     isDefault: db.is_default,
@@ -209,6 +213,18 @@ const transformBoard = (db: DbBoard, stages: DbBoardStage[]): Board => {
     createdAt: db.created_at,
   };
 };
+
+function normalizeBoardKey(input: string | undefined | null): string | null {
+  const s = slugify(String(input ?? ''));
+  return s ? s : null;
+}
+
+function isUniqueViolationOnIndex(error: unknown, indexName: string): boolean {
+  const code = String((error as any)?.code ?? '');
+  const message = String((error as any)?.message ?? '');
+  const details = String((error as any)?.details ?? '');
+  return code === '23505' && (message.includes(indexName) || details.includes(indexName));
+}
 
 /**
  * Transforma board do formato da aplicação para o formato DB.
@@ -249,6 +265,11 @@ const transformToDb = (board: Omit<Board, 'id' | 'createdAt'>, order?: number): 
 
   if (defaultProductId) {
     db.default_product_id = defaultProductId;
+  }
+
+  const key = normalizeBoardKey((board as any).key);
+  if (key) {
+    (db as any).key = key;
   }
 
   return db;
@@ -382,7 +403,8 @@ export const boardsService = {
       }
 
       // 1. Create board
-      const boardData = {
+      const baseKey = normalizeBoardKey((board as any).key) || normalizeBoardKey(board.name);
+      const boardDataBase: any = {
         ...transformToDb(board, boardOrder),
         organization_id: organizationId,
         // For won/lost stages, we can't save them yet because stages don't exist
@@ -390,26 +412,47 @@ export const boardsService = {
         lost_stage_id: null,
       };
 
-      let { data: newBoard, error: boardError } = await supabase
-        .from('boards')
-        .insert(boardData)
-        .select()
-        .single();
+      // Try insert with a stable key, retrying on unique violations by suffixing.
+      let newBoard: any = null;
+      let boardError: any = null;
 
-      // Backwards-compat: DB may not have default_product_id yet (migration not applied).
-      // If the user is creating boards without a product, we can safely retry without the column.
-      if (boardError && isMissingColumnInSchemaCache(boardError, 'boards', 'default_product_id')) {
-        const retryData = { ...(boardData as any) };
-        delete retryData.default_product_id;
+      const MAX_KEY_ATTEMPTS = 20;
+      for (let attempt = 0; attempt <= MAX_KEY_ATTEMPTS; attempt += 1) {
+        const candidateKey = baseKey
+          ? (attempt === 0 ? baseKey : `${baseKey}-${attempt + 1}`)
+          : null;
 
-        const retry = await supabase
+        const boardData: any = { ...boardDataBase };
+        if (candidateKey) boardData.key = candidateKey;
+
+        let insert = await supabase
           .from('boards')
-          .insert(retryData)
+          .insert(boardData)
           .select()
           .single();
 
-        newBoard = retry.data as any;
-        boardError = retry.error as any;
+        // Backwards-compat: DB may not have default_product_id yet (migration not applied).
+        if (insert.error && isMissingColumnInSchemaCache(insert.error, 'boards', 'default_product_id')) {
+          const retryData = { ...(boardData as any) };
+          delete retryData.default_product_id;
+          insert = await supabase.from('boards').insert(retryData).select().single();
+        }
+
+        // Backwards-compat: DB may not have key yet (migration not applied).
+        if (insert.error && isMissingColumnInSchemaCache(insert.error, 'boards', 'key')) {
+          const retryData = { ...(boardData as any) };
+          delete retryData.key;
+          insert = await supabase.from('boards').insert(retryData).select().single();
+        }
+
+        newBoard = insert.data as any;
+        boardError = insert.error as any;
+
+        if (boardError && isUniqueViolationOnIndex(boardError, 'idx_boards_org_key_unique')) {
+          continue;
+        }
+
+        break;
       }
 
       if (boardError) {
@@ -498,6 +541,7 @@ export const boardsService = {
 
       const dbUpdates: Partial<DbBoard> = {};
 
+      if ((updates as any).key !== undefined) (dbUpdates as any).key = normalizeBoardKey((updates as any).key);
       if (updates.name !== undefined) dbUpdates.name = updates.name;
       if (updates.description !== undefined) dbUpdates.description = updates.description || null;
       if (updates.isDefault !== undefined) dbUpdates.is_default = updates.isDefault;
@@ -532,6 +576,17 @@ export const boardsService = {
         .from('boards')
         .update(dbUpdates)
         .eq('id', id);
+
+      // Backwards-compat: ignore key updates if column isn't present yet.
+      if (error && isMissingColumnInSchemaCache(error, 'boards', 'key')) {
+        const retryUpdates = { ...(dbUpdates as any) };
+        delete retryUpdates.key;
+        const retry = await supabase
+          .from('boards')
+          .update(retryUpdates)
+          .eq('id', id);
+        error = retry.error as any;
+      }
 
       // Backwards-compat: ignore default_product_id updates if column isn't present yet.
       if (error && isMissingColumnInSchemaCache(error, 'boards', 'default_product_id')) {

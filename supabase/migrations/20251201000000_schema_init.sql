@@ -23,6 +23,8 @@
 -- -----------------------------------------------------------------------------
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA extensions;
 CREATE EXTENSION IF NOT EXISTS "pgcrypto" WITH SCHEMA extensions;
+-- Accent-insensitive slug generation (boards.key backfill / normalization)
+CREATE EXTENSION IF NOT EXISTS unaccent;
 -- Database Webhooks / HTTP async (Integrações)
 CREATE EXTENSION IF NOT EXISTS pg_net;
 
@@ -130,6 +132,8 @@ ALTER TABLE public.crm_companies ENABLE ROW LEVEL SECURITY;
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.boards (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    -- Human-friendly stable key (slug) for integrations
+    key TEXT,
     name TEXT NOT NULL,
     description TEXT,
     type TEXT DEFAULT 'SALES',
@@ -153,6 +157,55 @@ CREATE TABLE IF NOT EXISTS public.boards (
     owner_id UUID REFERENCES public.profiles(id),
     organization_id UUID REFERENCES public.organizations(id) ON DELETE CASCADE
 );
+
+-- Unique per organization for active (non-deleted) boards.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_boards_org_key_unique
+ON public.boards (organization_id, key)
+WHERE deleted_at IS NULL AND key IS NOT NULL;
+
+-- Backfill keys for existing boards (upgrade-safe; no-op on fresh installs)
+DO $$
+DECLARE
+  r RECORD;
+  base TEXT;
+  candidate TEXT;
+  i INT;
+BEGIN
+  FOR r IN
+    SELECT id, organization_id, name
+    FROM public.boards
+    WHERE deleted_at IS NULL
+      AND (key IS NULL OR btrim(key) = '')
+    ORDER BY created_at ASC
+  LOOP
+    -- Basic slug: remove accents (unaccent), lowercase, replace non-alnum with '-'
+    base := lower(regexp_replace(unaccent(coalesce(r.name, '')), '[^a-z0-9]+', '-', 'g'));
+    base := regexp_replace(base, '(^-+|-+$)', '', 'g');
+    base := regexp_replace(base, '-{2,}', '-', 'g');
+    IF base IS NULL OR btrim(base) = '' THEN
+      base := 'board';
+    END IF;
+
+    candidate := base;
+    i := 2;
+    WHILE EXISTS (
+      SELECT 1
+      FROM public.boards b
+      WHERE b.organization_id = r.organization_id
+        AND b.deleted_at IS NULL
+        AND b.key = candidate
+        AND b.id <> r.id
+    ) LOOP
+      candidate := base || '-' || i;
+      i := i + 1;
+    END LOOP;
+
+    UPDATE public.boards
+      SET key = candidate,
+          updated_at = now()
+    WHERE id = r.id;
+  END LOOP;
+END $$;
 
 ALTER TABLE public.boards ENABLE ROW LEVEL SECURITY;
 
