@@ -48,7 +48,36 @@ export async function POST(req: Request) {
 
   if (!created.ok) {
     // Never reuse existing projects — always fail if name conflicts.
-    // Rationale: existing projects may have stale data/schema from previous deployments.
+    // But provide details of the existing project so the UI can offer actions (pause/delete/rename).
+    const msg = String(created.error || '').toLowerCase();
+    if ((created.status === 400 || created.status === 409) && msg.includes('already exists')) {
+      // Try to find the existing project to provide details
+      const existing = await listAllSupabaseOrganizationProjects({
+        accessToken: parsed.data.accessToken.trim(),
+        organizationSlug: parsed.data.organizationSlug.trim(),
+        statuses: undefined,
+        search: parsed.data.name.trim(),
+      });
+      
+      if (existing.ok) {
+        const match = existing.projects.find(
+          (p) => String(p?.name || '').toLowerCase().trim() === parsed.data.name.trim().toLowerCase()
+        );
+        if (match) {
+          return json({
+            error: 'Project already exists',
+            code: 'PROJECT_EXISTS',
+            existingProject: {
+              ref: match.ref,
+              name: match.name,
+              status: match.status,
+              region: match.region,
+            },
+          }, 409);
+        }
+      }
+    }
+    
     return json({ error: created.error, status: created.status, details: created.response }, created.status || 500);
   }
 

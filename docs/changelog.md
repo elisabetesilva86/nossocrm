@@ -571,3 +571,23 @@
   - Agora **sempre retorna erro 409** quando o projeto já existe, independente do status
   - Mensagem clara: `"Projeto com este nome já existe. Delete o projeto antigo no Supabase ou aguarde alguns minutos e tente novamente."`
 - **Rationale**: Projetos existentes podem ter configurações inconsistentes, migrations parciais ou dados obsoletos — sempre criar projeto novo garante ambiente limpo
+
+### 28/12/2025 — Modal de Conflito de Projetos Supabase
+
+- **Feature**: Quando um projeto Supabase com o mesmo nome já existe, o wizard agora mostra um modal interativo com ações contextuais
+- **Backend (`/api/installer/supabase/create-project`)**:
+  - Retorna erro 409 com detalhes do projeto existente (`ref`, `name`, `status`, `region`)
+  - Código de erro: `PROJECT_EXISTS`
+- **Frontend (wizard)**:
+  - Novo modal de conflito com 3 ações:
+    - **⏸️ Pausar** (se projeto estiver ACTIVE)
+    - **🗑️ Deletar** (sempre disponível, com confirmação)
+    - **✏️ Usar outro nome** (volta para tela de token)
+  - Após deletar, retenta criação automaticamente
+- **UX**: Usuário tem controle total sobre como resolver conflitos, sem precisar sair do wizard
+
+**Cenários cobertos:**
+1. Projeto existe (PAUSED) + Tem slot → [Deletar / Outro nome]
+2. Projeto existe (PAUSED) + Sem slot → [Deletar / Outro nome] + lista de ativos para pausar
+3. Projeto existe (ACTIVE) + Tem slot → [Pausar / Deletar / Outro nome]
+4. Projeto existe (ACTIVE) + Sem slot → [Pausar / Deletar / Outro nome] + lista de ativos para pausar

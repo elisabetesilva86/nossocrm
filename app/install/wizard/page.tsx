@@ -146,6 +146,7 @@ export default function InstallWizardPage() {
   const [supabaseOrgsError, setSupabaseOrgsError] = useState<string | null>(null);
   const [supabaseCreating, setSupabaseCreating] = useState(false);
   const [supabaseCreateError, setSupabaseCreateError] = useState<string | null>(null);
+  const [conflictingProject, setConflictingProject] = useState<{ref: string; name: string; status: string; region?: string} | null>(null);
   const [supabaseProvisioning, setSupabaseProvisioning] = useState(false);
   const [supabaseProvisioningStatus, setSupabaseProvisioningStatus] = useState<string | null>(null);
   const [supabaseResolving, setSupabaseResolving] = useState(false);
@@ -492,7 +493,13 @@ export default function InstallWizardPage() {
       console.log('📦 [SUPABASE] Resposta create-project:', JSON.stringify(data));
       console.log('⏱️ [SUPABASE] create-project levou:', ((Date.now() - createStart) / 1000).toFixed(1), 'segundos');
       
-      if (!res.ok) throw new Error(data?.error || 'Erro');
+      if (!res.ok) {
+        // If it's a conflict error, throw the full data object as JSON string
+        if (data?.code === 'PROJECT_EXISTS') {
+          throw new Error(JSON.stringify(data));
+        }
+        throw new Error(data?.error || 'Erro');
+      }
       
       const ref = String(data?.projectRef || '');
       const url = String(data?.supabaseUrl || '');
@@ -544,6 +551,19 @@ export default function InstallWizardPage() {
       }
     } catch (err) {
       console.error('❌ [SUPABASE] Erro:', err);
+      
+      // Check if it's a conflict error with existing project details
+      if (err instanceof Error) {
+        try {
+          const errorData = JSON.parse(err.message);
+          if (errorData.code === 'PROJECT_EXISTS' && errorData.existingProject) {
+            setConflictingProject(errorData.existingProject);
+            setSupabaseUiStep('needspace'); // Will show conflict modal
+            return;
+          }
+        } catch {}
+      }
+      
       setSupabaseCreateError(humanizeError(err instanceof Error ? err.message : 'Erro'));
       setSupabaseUiStep('needspace');
     } finally {
@@ -959,7 +979,7 @@ export default function InstallWizardPage() {
                   </motion.div>
                 )}
                 
-                {supabaseUiStep === 'needspace' && (
+                {supabaseUiStep === 'needspace' && !conflictingProject && (
                   <motion.div key="supabase-needspace" variants={sceneVariants} initial="initial" animate="animate" exit="exit" transition={sceneTransition}>
                     <div className="text-center mb-6">
                       <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 mb-6">
@@ -986,6 +1006,104 @@ export default function InstallWizardPage() {
                       <span>Você pode reativar a qualquer momento no painel do Supabase.</span>
                               </div>
                     {supabaseCreateError && <div className="mt-4 rounded-xl bg-red-500/10 border border-red-500/20 p-4 text-red-400 text-sm">{supabaseCreateError}</div>}
+                  </motion.div>
+                )}
+                
+                {/* Modal de conflito - projeto já existe */}
+                {supabaseUiStep === 'needspace' && conflictingProject && (
+                  <motion.div key="supabase-conflict" variants={sceneVariants} initial="initial" animate="animate" exit="exit" transition={sceneTransition}>
+                    <div className="text-center mb-6">
+                      <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 mb-6">
+                        <AlertCircle className="w-8 h-8 text-amber-400" />
+                      </div>
+                      <h1 className="text-2xl font-bold text-white mb-2">Projeto já existe</h1>
+                      <p className="text-slate-400">
+                        O projeto <span className="text-white font-medium">{conflictingProject.name}</span> já existe.
+                      </p>
+                    </div>
+                    
+                    <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-6 space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Status:</span>
+                        <span className={conflictingProject.status?.toUpperCase().includes('ACTIVE') ? 'text-emerald-400' : 'text-amber-400'}>
+                          {conflictingProject.status || 'DESCONHECIDO'}
+                        </span>
+                      </div>
+                      {conflictingProject.region && (
+                        <div className="flex justify-between">
+                          <span className="text-slate-400">Região:</span>
+                          <span className="text-white">{conflictingProject.region}</span>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="space-y-3">
+                      {conflictingProject.status?.toUpperCase().includes('ACTIVE') && (
+                        <button
+                          onClick={async () => {
+                            setSupabasePausingRef(conflictingProject.ref);
+                            await pauseProject(conflictingProject.ref);
+                            setSupabasePausingRef(null);
+                            // After pausing, offer to delete
+                          }}
+                          disabled={supabasePausingRef === conflictingProject.ref}
+                          className="w-full px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-white font-medium transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                        >
+                          {supabasePausingRef === conflictingProject.ref ? (
+                            <><Loader2 className="w-5 h-5 animate-spin" /> Pausando...</>
+                          ) : (
+                            <><Pause className="w-5 h-5" /> Pausar projeto</>
+                          )}
+                        </button>
+                      )}
+                      
+                      <button
+                        onClick={async () => {
+                          if (!confirm(`Tem certeza que deseja DELETAR o projeto "${conflictingProject.name}"? Esta ação não pode ser desfeita.`)) return;
+                          
+                          try {
+                            const res = await fetch('/api/installer/supabase/delete-project', {
+                              method: 'POST',
+                              headers: { 'content-type': 'application/json' },
+                              body: JSON.stringify({
+                                installerToken: installerToken.trim() || undefined,
+                                accessToken: supabaseAccessToken.trim(),
+                                projectRef: conflictingProject.ref,
+                              }),
+                            });
+                            
+                            if (!res.ok) throw new Error('Falha ao deletar projeto');
+                            
+                            // Clear conflict and retry creation
+                            setConflictingProject(null);
+                            setSupabaseCreateError(null);
+                            void decideAndCreate(supabaseOrgs, supabasePreflight!);
+                          } catch (err) {
+                            setSupabaseCreateError(err instanceof Error ? err.message : 'Erro ao deletar');
+                          }
+                        }}
+                        className="w-full px-6 py-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 font-medium transition-all flex items-center justify-center gap-2"
+                      >
+                        <AlertCircle className="w-5 h-5" /> Deletar projeto
+                      </button>
+                      
+                      <button
+                        onClick={() => {
+                          setConflictingProject(null);
+                          setSupabaseCreateError(null);
+                          setSupabaseUiStep('pat');
+                        }}
+                        className="w-full px-6 py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white font-medium transition-all"
+                      >
+                        Usar outro nome
+                      </button>
+                    </div>
+                    
+                    {supabaseCreateError && (
+                      <div className="mt-4 rounded-xl bg-red-500/10 border border-red-500/20 p-4 text-red-400 text-sm">
+                        {supabaseCreateError}
+                      </div>
+                    )}
                   </motion.div>
                 )}
                 
