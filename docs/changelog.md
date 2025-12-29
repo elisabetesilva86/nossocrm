@@ -2,6 +2,13 @@
 
 ## 29/12/2025
 
+- **Installer — Bloqueio de acesso após instalação completa**:
+  - **Problema**: Após o wizard terminar, as páginas `/install` ainda eram acessíveis (mesmo que os endpoints retornassem 403)
+  - **Solução**: Novo endpoint `/api/installer/check-initialized` que verifica se a instância está inicializada
+  - **Proteção**: Páginas `/install`, `/install/start` e `/install/wizard` agora verificam se está inicializado e redirecionam para `/dashboard` se estiver
+  - **Fail-safe**: Em caso de erro na verificação, não bloqueia o acesso (permite instalação mesmo com problemas temporários)
+  - **Arquivos**: `app/api/installer/check-initialized/route.ts`, `app/install/page.tsx`, `app/install/start/page.tsx`, `app/install/wizard/page.tsx`
+
 - **README — Reescrita completa seguindo padrão SmartZap**:
   - **Mudança**: README completamente reescrito focando em instalação via Vercel (fork primeiro)
   - **Fluxo principal**: Fork no GitHub → Deploy na Vercel → Wizard de instalação

@@ -16,13 +16,36 @@ export default function InstallEntryPage() {
   const router = useRouter();
 
   useEffect(() => {
-    const token = localStorage.getItem(STORAGE_TOKEN);
-    const project = localStorage.getItem(STORAGE_PROJECT);
-    if (token && project) {
-      router.replace('/install/wizard');
-    } else {
-      router.replace('/install/start');
-    }
+    let cancelled = false;
+    
+    // Verifica se a instância já está inicializada (bloqueia acesso após instalação)
+    (async () => {
+      try {
+        const res = await fetch('/api/installer/check-initialized', { cache: 'no-store' });
+        const data = await res.json();
+        if (!cancelled && data?.initialized === true) {
+          // Instância já inicializada: redireciona para dashboard
+          router.replace('/dashboard');
+          return;
+        }
+      } catch (err) {
+        // Fail-safe: em caso de erro, não bloqueia o acesso ao wizard
+        console.warn('[install] Error checking initialization:', err);
+      }
+      
+      // Se não está inicializada, continua com o fluxo normal
+      if (!cancelled) {
+        const token = localStorage.getItem(STORAGE_TOKEN);
+        const project = localStorage.getItem(STORAGE_PROJECT);
+        if (token && project) {
+          router.replace('/install/wizard');
+        } else {
+          router.replace('/install/start');
+        }
+      }
+    })();
+    
+    return () => { cancelled = true; };
   }, [router]);
 
   return (

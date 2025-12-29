@@ -109,6 +109,26 @@ export default function InstallStartPage() {
     };
   })();
   
+  // Verifica se a instância já está inicializada (bloqueia acesso após instalação)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/installer/check-initialized', { cache: 'no-store' });
+        const data = await res.json();
+        if (!cancelled && data?.initialized === true) {
+          // Instância já inicializada: redireciona para dashboard
+          router.replace('/dashboard');
+          return;
+        }
+      } catch (err) {
+        // Fail-safe: em caso de erro, não bloqueia o acesso ao wizard
+        console.warn('[start] Error checking initialization:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [router]);
+
   // Carrega meta do instalador
   useEffect(() => {
     let cancelled = false;
