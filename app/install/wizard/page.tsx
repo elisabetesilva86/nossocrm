@@ -147,6 +147,7 @@ export default function InstallWizardPage() {
   const [supabaseCreating, setSupabaseCreating] = useState(false);
   const [supabaseCreateError, setSupabaseCreateError] = useState<string | null>(null);
   const [conflictingProject, setConflictingProject] = useState<{ref: string; name: string; status: string; region?: string} | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [supabaseProvisioning, setSupabaseProvisioning] = useState(false);
   const [supabaseProvisioningStatus, setSupabaseProvisioningStatus] = useState<string | null>(null);
   const [supabaseResolving, setSupabaseResolving] = useState(false);
@@ -1009,6 +1010,82 @@ export default function InstallWizardPage() {
                   </motion.div>
                 )}
                 
+                {/* Modal de confirmação de deleção */}
+                {showDeleteConfirm && conflictingProject && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+                    onClick={() => setShowDeleteConfirm(false)}
+                  >
+                    <motion.div
+                      initial={{ scale: 0.9, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0.9, opacity: 0 }}
+                      className="bg-slate-900 border border-red-500/30 rounded-2xl p-8 max-w-md w-full shadow-2xl"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="text-center mb-6">
+                        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-500/10 border border-red-500/20 mb-4">
+                          <AlertCircle className="w-8 h-8 text-red-400" />
+                        </div>
+                        <h2 className="text-2xl font-bold text-white mb-2">Deletar projeto?</h2>
+                        <p className="text-slate-400">
+                          O projeto <span className="text-white font-medium">"{conflictingProject.name}"</span> será removido permanentemente.
+                        </p>
+                      </div>
+                      
+                      <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-4 mb-6">
+                        <p className="text-red-400 text-sm text-center">
+                          ⚠️ Esta ação não pode ser desfeita
+                        </p>
+                      </div>
+                      
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => setShowDeleteConfirm(false)}
+                          className="flex-1 px-6 py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white font-medium transition-all"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          onClick={async () => {
+                            setShowDeleteConfirm(false);
+                            setSupabaseCreateError(null);
+                            
+                            try {
+                              const res = await fetch('/api/installer/supabase/delete-project', {
+                                method: 'POST',
+                                headers: { 'content-type': 'application/json' },
+                                body: JSON.stringify({
+                                  installerToken: installerToken.trim() || undefined,
+                                  accessToken: supabaseAccessToken.trim(),
+                                  projectRef: conflictingProject.ref,
+                                  confirmRef: conflictingProject.ref,
+                                }),
+                              });
+                              
+                              const data = await res.json();
+                              if (!res.ok) throw new Error(data?.error || 'Falha ao deletar projeto');
+                              
+                              // Clear conflict and retry creation
+                              setConflictingProject(null);
+                              setSupabaseCreateError(null);
+                              void decideAndCreate(supabaseOrgs, supabasePreflight!);
+                            } catch (err) {
+                              setSupabaseCreateError(err instanceof Error ? err.message : 'Erro ao deletar');
+                            }
+                          }}
+                          className="flex-1 px-6 py-3 rounded-xl bg-red-500 hover:bg-red-400 text-white font-medium transition-all"
+                        >
+                          Sim, deletar
+                        </button>
+                      </div>
+                    </motion.div>
+                  </motion.div>
+                )}
+                
                 {/* Modal de conflito - projeto já existe */}
                 {supabaseUiStep === 'needspace' && conflictingProject && (
                   <motion.div key="supabase-conflict" variants={sceneVariants} initial="initial" animate="animate" exit="exit" transition={sceneTransition}>
@@ -1022,20 +1099,9 @@ export default function InstallWizardPage() {
                       </p>
                     </div>
                     
-                    <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-6 space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">Status:</span>
-                        <span className={(conflictingProject.status?.toUpperCase() === 'ACTIVE_HEALTHY' || conflictingProject.status?.toUpperCase() === 'ACTIVE') ? 'text-emerald-400' : 'text-amber-400'}>
-                          {conflictingProject.status || 'DESCONHECIDO'}
-                        </span>
-                      </div>
-                      {conflictingProject.region && (
-                        <div className="flex justify-between">
-                          <span className="text-slate-400">Região:</span>
-                          <span className="text-white">{conflictingProject.region}</span>
-                        </div>
-                      )}
-                    </div>
+                    <p className="text-slate-400 text-center mb-6">
+                      Escolha uma das opções abaixo para continuar:
+                    </p>
                     
                     <div className="space-y-3">
                       {(conflictingProject.status?.toUpperCase() === 'ACTIVE_HEALTHY' || conflictingProject.status?.toUpperCase() === 'ACTIVE') && (
@@ -1058,41 +1124,9 @@ export default function InstallWizardPage() {
                       )}
                       
                       <button
-                        onClick={async () => {
+                        onClick={() => {
                           setSupabaseCreateError(null);
-                          const userConfirmed = window.confirm(
-                            `⚠️ ATENÇÃO: Você está prestes a DELETAR permanentemente o projeto "${conflictingProject.name}".
-
-` +
-                            `Esta ação NÃO pode ser desfeita e todos os dados serão perdidos.
-
-` +
-                            `Deseja continuar?`
-                          );
-                          if (!userConfirmed) return;
-                          
-                          try {
-                            const res = await fetch('/api/installer/supabase/delete-project', {
-                              method: 'POST',
-                              headers: { 'content-type': 'application/json' },
-                              body: JSON.stringify({
-                                installerToken: installerToken.trim() || undefined,
-                                accessToken: supabaseAccessToken.trim(),
-                                projectRef: conflictingProject.ref,
-                                confirmRef: conflictingProject.ref,
-                              }),
-                            });
-                            
-                            const data = await res.json();
-                            if (!res.ok) throw new Error(data?.error || 'Falha ao deletar projeto');
-                            
-                            // Clear conflict and retry creation
-                            setConflictingProject(null);
-                            setSupabaseCreateError(null);
-                            void decideAndCreate(supabaseOrgs, supabasePreflight!);
-                          } catch (err) {
-                            setSupabaseCreateError(err instanceof Error ? err.message : 'Erro ao deletar');
-                          }
+                          setShowDeleteConfirm(true);
                         }}
                         className="w-full px-6 py-3 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 font-medium transition-all flex items-center justify-center gap-2"
                       >

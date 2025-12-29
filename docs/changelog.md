@@ -606,3 +606,19 @@
   - Antes: `window.alert` simples
   - Agora: `window.confirm` com mensagem detalhada sobre irreversibilidade
   - Texto: "⚠️ ATENÇÃO: Você está prestes a DELETAR permanentemente... Esta ação NÃO pode ser desfeita..."
+
+### 28/12/2025 — UX: Modal Customizado de Deleção (Sem `window.confirm`)
+
+- **UX**: Removido `window.confirm` nativo do navegador
+  - Antes: Alert feio do sistema operacional
+  - Agora: Modal customizado com design consistente do wizard
+- **UX**: Removidas informações técnicas desnecessárias
+  - Antes: Mostrava "Status: INACTIVE" e "Região: us-west-2" (informação técnica)
+  - Agora: Apenas "Escolha uma das opções abaixo para continuar" (linguagem simples)
+- **Design**: Modal de confirmação de deleção estilizado
+  - Ícone de alerta vermelho centralizado
+  - Título: "Deletar projeto?"
+  - Mensagem clara: "O projeto 'X' será removido permanentemente"
+  - Aviso destacado: "⚠️ Esta ação não pode ser desfeita"
+  - Botões: "Cancelar" (cinza) e "Sim, deletar" (vermelho)
+  - Backdrop blur com animação suave (framer-motion)
