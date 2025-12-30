@@ -2,6 +2,14 @@
 
 ## 30/12/2025
 
+- **Central de I.A — Melhoria de UX nos toggles**:
+  - **Problema**: Toggles não deixavam claro se estavam habilitados ou desabilitados (cores inconsistentes).
+  - **Solução**: Padronização de todos os toggles para usar **verde quando ligado** e **vermelho quando desligado** (padrão universal).
+  - **Aplicado em**: Toggle "IA ativa na organização", "Modo Pensamento (Thinking)", "Google Search Grounding", "Prompt Caching" e todas as funções de IA.
+  - **Arquivos**: `features/settings/AICenterSettings.tsx`, `features/settings/components/AIConfigSection.tsx`
+
+## 30/12/2025
+
 - **Installer Wizard — Supabase Free limit (global) + menos “projetos fantasmas”**:
   - **Problema**: usuários no plano Free do Supabase podem ter limite **global por usuário** (2 projetos ativos), então o wizard tentava criar em outra org “com slot” e falhava com erro 400 (parecia travar).
   - **Solução (fluxo)**: quando o preflight detecta `freeGlobalLimitHit=true`, o wizard vai direto para **“Precisamos de espaço”** (sem tentar criar projeto).
